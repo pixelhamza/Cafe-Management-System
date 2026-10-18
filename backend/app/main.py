@@ -1,17 +1,37 @@
-"""FastAPI application for the Cafe Management System.
+"""FastAPI application for the Cafe Management System."""
 
-Menu items are validated here but not stored yet; persistence to PostgreSQL
-is the next subtask.
-"""
+import logging
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
+from . import crud
+from .database import Base, engine, get_db
 from .errors import request_validation_handler
 from .schemas import Category, MenuItemCreate, MenuItemRead
 
-app = FastAPI(title="Cafe Management System API", version="0.1.0")
+logger = logging.getLogger("uvicorn.error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create the table if it is missing. The app still starts when the
+    # database is unreachable; requests then fail with a clear 503.
+    try:
+        Base.metadata.create_all(bind=engine)
+    except SQLAlchemyError as exc:
+        logger.warning("Could not prepare the database at startup: %s", exc)
+    yield
+
+
+app = FastAPI(
+    title="Cafe Management System API", version="0.2.0", lifespan=lifespan
+)
 
 # The frontend is served as static files from a different port in development.
 app.add_middleware(
@@ -22,6 +42,15 @@ app.add_middleware(
 )
 
 app.add_exception_handler(RequestValidationError, request_validation_handler)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request, exc: SQLAlchemyError) -> JSONResponse:
+    logger.error("Database error on %s: %s", request.url.path, exc)
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "Could not reach the database. Please try again."},
+    )
 
 
 @app.get("/api/health")
@@ -35,11 +64,15 @@ def list_categories() -> list[str]:
     return [category.value for category in Category]
 
 
-@app.post("/api/menu-items", response_model=MenuItemRead)
-def create_menu_item(item: MenuItemCreate) -> MenuItemCreate:
-    """Validate a menu item.
+@app.get("/api/menu-items", response_model=list[MenuItemRead])
+def list_menu_items(db: Session = Depends(get_db)) -> list:
+    return crud.list_menu_items(db)
 
-    Returns 200 with the cleaned item. This becomes a 201 once the item is
-    actually written to the database in the next subtask.
-    """
-    return item
+
+@app.post(
+    "/api/menu-items",
+    response_model=MenuItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_menu_item(item: MenuItemCreate, db: Session = Depends(get_db)):
+    return crud.create_menu_item(db, item)

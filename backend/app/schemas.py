@@ -8,7 +8,7 @@ immediate feedback, but the server never trusts that and re-validates here.
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_serializer, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 MAX_NAME_LENGTH = 100
 MAX_PRICE = Decimal("100000.00")
@@ -36,6 +36,9 @@ class MenuItemCreate(BaseModel):
 
 
 class MenuItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
     name: str
     category: Category
     price: Decimal

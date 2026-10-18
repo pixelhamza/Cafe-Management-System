@@ -1,7 +1,8 @@
 // Add Menu Item form.
-// These checks mirror backend/app/schemas.py so the user gets immediate
-// feedback. The server re-validates everything regardless.
-// Saving to the API is the next subtask; submitting does not persist yet.
+// The validation here mirrors backend/app/schemas.py so the user gets
+// immediate feedback. The server re-validates everything regardless.
+
+const API_BASE = "http://localhost:8000";
 
 const MAX_NAME_LENGTH = 100;
 const MAX_PRICE = 100000;
@@ -9,6 +10,19 @@ const CATEGORIES = ["Beverages", "Food", "Desserts", "Snacks"];
 
 const form = document.getElementById("menu-item-form");
 const status = document.getElementById("form-status");
+const submitButton = document.getElementById("submit-button");
+const listStatus = document.getElementById("list-status");
+const menuTable = document.getElementById("menu-table");
+const menuTableBody = document.getElementById("menu-table-body");
+
+// Maps a server error key back to the matching form field id.
+const FIELD_IDS = {
+  name: "item-name",
+  category: "item-category",
+  price: "item-price",
+};
+
+let submitting = false;
 
 const fields = ["item-name", "item-category", "item-price"];
 
@@ -120,8 +134,69 @@ fields.forEach((fieldId) => {
   input.addEventListener("change", () => clearFieldError(fieldId));
 });
 
-form.addEventListener("submit", (event) => {
+function formatPrice(value) {
+  return `\u20b9${Number(value).toFixed(2)}`;
+}
+
+function renderMenuItems(items) {
+  menuTableBody.replaceChildren();
+
+  if (items.length === 0) {
+    menuTable.hidden = true;
+    listStatus.textContent = "No menu items yet. Add one above.";
+    listStatus.className = "status";
+    listStatus.hidden = false;
+    return;
+  }
+
+  for (const item of items) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    const category = document.createElement("td");
+    const price = document.createElement("td");
+
+    // textContent, not innerHTML, so item names cannot inject markup.
+    name.textContent = item.name;
+    category.textContent = item.category;
+    price.textContent = formatPrice(item.price);
+    price.className = "numeric";
+
+    row.append(name, category, price);
+    menuTableBody.append(row);
+  }
+
+  menuTable.hidden = false;
+  listStatus.hidden = true;
+}
+
+async function loadMenuItems() {
+  try {
+    const response = await fetch(`${API_BASE}/api/menu-items`);
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+    renderMenuItems(await response.json());
+  } catch {
+    menuTable.hidden = true;
+    listStatus.textContent =
+      "Could not load the menu. Is the API running on port 8000?";
+    listStatus.className = "status error";
+    listStatus.hidden = false;
+  }
+}
+
+function setSubmitting(active) {
+  submitting = active;
+  submitButton.disabled = active;
+  submitButton.textContent = active ? "Saving..." : "Add item";
+}
+
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (submitting) {
+    return;
+  }
+
   clearAllErrors();
   clearStatus();
 
@@ -141,8 +216,54 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
-  showStatus("Looks good. Saving to the server is not wired up yet.", null);
+  setSubmitting(true);
+  try {
+    const response = await fetch(`${API_BASE}/api/menu-items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: values.name.trim(),
+        category: values.category,
+        price: values.price.trim(),
+      }),
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (response.status === 201) {
+      form.reset();
+      showStatus(`"${body.name}" was added to the menu.`, "success");
+      await loadMenuItems();
+      return;
+    }
+
+    if (response.status === 422 && body.errors) {
+      // Mirror the server's per-field messages onto the form.
+      for (const [key, message] of Object.entries(body.errors)) {
+        const fieldId = FIELD_IDS[key];
+        if (fieldId) {
+          showFieldError(fieldId, message);
+        }
+      }
+      showStatus(body.detail || "The menu item could not be saved.", "error");
+      return;
+    }
+
+    showStatus(
+      body.detail || `The server returned an error (${response.status}).`,
+      "error"
+    );
+  } catch {
+    showStatus(
+      "Could not reach the server. Check that the API is running on port 8000.",
+      "error"
+    );
+  } finally {
+    setSubmitting(false);
+  }
 });
+
+loadMenuItems();
 
 form.addEventListener("reset", () => {
   clearAllErrors();

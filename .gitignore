@@ -15,3 +15,6 @@ __pycache__/
 
 # Project brief (local only)
 context.md
+
+# SQLite database files
+*.db

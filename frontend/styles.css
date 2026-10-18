@@ -180,3 +180,54 @@ button.secondary:hover {
   border-color: var(--success);
   background: #e9f6ec;
 }
+
+/* Menu items table */
+
+.card + .card {
+  margin-top: 1.25rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.55rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+th {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

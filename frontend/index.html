@@ -77,6 +77,24 @@
         </div>
       </form>
     </section>
+
+    <section class="card" aria-labelledby="list-heading">
+      <h2 id="list-heading">Menu items</h2>
+
+      <div id="list-status" class="status" role="status" aria-live="polite" hidden></div>
+
+      <table id="menu-table" hidden>
+        <caption class="visually-hidden">Saved menu items</caption>
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">Category</th>
+            <th scope="col" class="numeric">Price</th>
+          </tr>
+        </thead>
+        <tbody id="menu-table-body"></tbody>
+      </table>
+    </section>
   </main>
 
   <script src="app.js"></script>

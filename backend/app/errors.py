@@ -59,7 +59,12 @@ def validation_error_response(errors: list[dict]) -> JSONResponse:
             flat.setdefault("non_field", "The request body was not valid JSON.")
             continue
 
-        location = [part for part in error.get("loc", []) if part != "body"]
+        loc = list(error.get("loc", []))
+        if loc and loc[0] == "path":
+            flat.setdefault("non_field", "The menu item id in the address is not valid.")
+            continue
+
+        location = [part for part in loc if part != "body"]
         field = str(location[0]) if location else "non_field"
         if field not in FIELD_LABELS:
             field = "non_field"

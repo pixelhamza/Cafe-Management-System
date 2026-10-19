@@ -15,6 +15,7 @@
   <main>
     <section class="card" aria-labelledby="form-heading">
       <h2 id="form-heading">Add Menu Item</h2>
+      <p id="editing-note" class="hint" hidden></p>
 
       <!-- Status messages are announced to screen readers as they appear. -->
       <div id="form-status" class="status" role="status" aria-live="polite" hidden></div>
@@ -74,6 +75,9 @@
         <div class="actions">
           <button type="submit" id="submit-button">Add item</button>
           <button type="reset" id="reset-button" class="secondary">Clear</button>
+          <button type="button" id="cancel-edit-button" class="secondary" hidden>
+            Cancel edit
+          </button>
         </div>
       </form>
     </section>
@@ -90,6 +94,7 @@
             <th scope="col">Item</th>
             <th scope="col">Category</th>
             <th scope="col" class="numeric">Price</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
           </tr>
         </thead>
         <tbody id="menu-table-body"></tbody>

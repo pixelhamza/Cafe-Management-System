@@ -3,7 +3,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -69,6 +69,16 @@ def list_menu_items(db: Session = Depends(get_db)) -> list:
     return crud.list_menu_items(db)
 
 
+def _get_or_404(db: Session, item_id: int):
+    record = crud.get_menu_item(db, item_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That menu item no longer exists. It may have been deleted.",
+        )
+    return record
+
+
 @app.post(
     "/api/menu-items",
     response_model=MenuItemRead,
@@ -76,3 +86,11 @@ def list_menu_items(db: Session = Depends(get_db)) -> list:
 )
 def create_menu_item(item: MenuItemCreate, db: Session = Depends(get_db)):
     return crud.create_menu_item(db, item)
+
+
+@app.put("/api/menu-items/{item_id}", response_model=MenuItemRead)
+def update_menu_item(
+    item_id: int, item: MenuItemCreate, db: Session = Depends(get_db)
+):
+    record = _get_or_404(db, item_id)
+    return crud.update_menu_item(db, record, item)

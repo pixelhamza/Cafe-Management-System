@@ -11,6 +11,10 @@ const CATEGORIES = ["Beverages", "Food", "Desserts", "Snacks"];
 const form = document.getElementById("menu-item-form");
 const status = document.getElementById("form-status");
 const submitButton = document.getElementById("submit-button");
+const resetButton = document.getElementById("reset-button");
+const cancelEditButton = document.getElementById("cancel-edit-button");
+const formHeading = document.getElementById("form-heading");
+const editingNote = document.getElementById("editing-note");
 const listStatus = document.getElementById("list-status");
 const menuTable = document.getElementById("menu-table");
 const menuTableBody = document.getElementById("menu-table-body");
@@ -23,6 +27,8 @@ const FIELD_IDS = {
 };
 
 let submitting = false;
+// null means the form is adding; an id means it is editing that item.
+let editingId = null;
 
 const fields = ["item-name", "item-category", "item-price"];
 
@@ -134,11 +140,64 @@ fields.forEach((fieldId) => {
   input.addEventListener("change", () => clearFieldError(fieldId));
 });
 
+const REQUEST_TIMEOUT_MS = 10000;
+
 function formatPrice(value) {
   return `\u20b9${Number(value).toFixed(2)}`;
 }
 
-function renderMenuItems(items) {
+// Wraps fetch with a timeout so a hung request cannot leave the form
+// disabled forever. Network and timeout failures surface as exceptions;
+// HTTP errors come back normally for the caller to classify.
+async function requestJson(path, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: controller.signal,
+    });
+    const body = await response.json().catch(() => ({}));
+    return { response, body };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The request never reached the server, or no reply came back in time.
+// timeoutNote adds caller-specific advice when the request timed out.
+function describeNetworkFailure(error, timeoutNote = "") {
+  if (error.name === "AbortError") {
+    const note = timeoutNote ? ` ${timeoutNote}` : "";
+    return `The server took too long to respond.${note}`;
+  }
+  return (
+    "Could not reach the server. Check that the API is running on " +
+    "http://localhost:8000 and try again."
+  );
+}
+
+// The server replied, but with an error status.
+function describeServerFailure(response, body) {
+  if (response.status === 503) {
+    return (
+      body.detail ||
+      "The database is unavailable right now. Your item was not saved."
+    );
+  }
+  if (response.status >= 500) {
+    return `The server hit an error (${response.status}). Your item was not saved.`;
+  }
+  if (response.status === 404) {
+    return (
+      body.detail ||
+      "The API endpoint was not found. Is the server running the current code?"
+    );
+  }
+  return body.detail || `The request was rejected (${response.status}).`;
+}
+
+function renderMenuItems(items, newItemId) {
   menuTableBody.replaceChildren();
 
   if (items.length === 0) {
@@ -161,7 +220,22 @@ function renderMenuItems(items) {
     price.textContent = formatPrice(item.price);
     price.className = "numeric";
 
-    row.append(name, category, price);
+    const actions = document.createElement("td");
+    actions.className = "row-actions";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "link-button";
+    edit.textContent = "Edit";
+    // Name the item so the purpose is clear out of context.
+    edit.setAttribute("aria-label", `Edit ${item.name}`);
+    edit.addEventListener("click", () => startEditing(item));
+    actions.append(edit);
+
+    row.append(name, category, price, actions);
+    if (item.id === newItemId) {
+      // Briefly mark the row that was just added so it is easy to spot.
+      row.classList.add("row-new");
+    }
     menuTableBody.append(row);
   }
 
@@ -169,30 +243,87 @@ function renderMenuItems(items) {
   listStatus.hidden = true;
 }
 
-async function loadMenuItems() {
+async function loadMenuItems(newItemId) {
   try {
-    const response = await fetch(`${API_BASE}/api/menu-items`);
+    const { response, body } = await requestJson("/api/menu-items");
     if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
+      throw Object.assign(new Error("http"), { response, body });
     }
-    renderMenuItems(await response.json());
-  } catch {
+    renderMenuItems(body, newItemId);
+  } catch (error) {
+    const message = error.response
+      ? `Could not load the menu. ${describeServerFailure(error.response, error.body)}`
+      : describeNetworkFailure(error);
     menuTable.hidden = true;
-    listStatus.textContent =
-      "Could not load the menu. Is the API running on port 8000?";
+    listStatus.textContent = message;
     listStatus.className = "status error";
     listStatus.hidden = false;
   }
 }
 
+function enterAddMode() {
+  editingId = null;
+  formHeading.textContent = "Add Menu Item";
+  submitButton.textContent = "Add item";
+  resetButton.hidden = false;
+  cancelEditButton.hidden = true;
+  editingNote.hidden = true;
+  editingNote.textContent = "";
+}
+
+function startEditing(item) {
+  if (submitting) {
+    return;
+  }
+  editingId = item.id;
+  document.getElementById("item-name").value = item.name;
+  document.getElementById("item-category").value = item.category;
+  // The API sends price as a string already formatted to two places.
+  document.getElementById("item-price").value = item.price;
+
+  clearAllErrors();
+  clearStatus();
+  formHeading.textContent = "Edit Menu Item";
+  submitButton.textContent = "Update item";
+  // Clearing the fields mid-edit is confusing; cancelling is the way out.
+  resetButton.hidden = true;
+  cancelEditButton.hidden = false;
+  editingNote.textContent = `Editing "${item.name}". Save to apply your changes.`;
+  editingNote.hidden = false;
+  document.getElementById("item-name").focus();
+}
+
+cancelEditButton.addEventListener("click", () => {
+  if (submitting) {
+    return;
+  }
+  form.reset();
+  clearAllErrors();
+  clearStatus();
+  enterAddMode();
+  document.getElementById("item-name").focus();
+});
+
 function setSubmitting(active) {
   submitting = active;
   submitButton.disabled = active;
-  submitButton.textContent = active ? "Saving..." : "Add item";
+  resetButton.disabled = active;
+  cancelEditButton.disabled = active;
+  // Freeze the inputs too, so the values cannot drift from what is in flight.
+  fields.forEach((fieldId) => {
+    document.getElementById(fieldId).disabled = active;
+  });
+  submitButton.textContent = active
+    ? "Saving\u2026"
+    : editingId === null
+      ? "Add item"
+      : "Update item";
+  submitButton.setAttribute("aria-busy", String(active));
 }
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  // Ignore repeat submits (double click, Enter key) while one is in flight.
   if (submitting) {
     return;
   }
@@ -217,55 +348,91 @@ form.addEventListener("submit", async (event) => {
   }
 
   setSubmitting(true);
+  showStatus("Saving\u2026", null);
+  let saved = false;
+
   try {
-    const response = await fetch(`${API_BASE}/api/menu-items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: values.name.trim(),
-        category: values.category,
-        price: values.price.trim(),
-      }),
-    });
+    const editing = editingId !== null;
+    const { response, body } = await requestJson(
+      editing ? `/api/menu-items/${editingId}` : "/api/menu-items",
+      {
+        method: editing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: values.name.trim(),
+          category: values.category,
+          price: values.price.trim(),
+        }),
+      }
+    );
 
-    const body = await response.json().catch(() => ({}));
-
-    if (response.status === 201) {
+    if (response.status === (editing ? 200 : 201)) {
+      saved = true;
       form.reset();
-      showStatus(`"${body.name}" was added to the menu.`, "success");
-      await loadMenuItems();
+      clearAllErrors();
+      enterAddMode();
+      showStatus(
+        editing
+          ? `${body.name} (${formatPrice(body.price)}) was updated.`
+          : `${body.name} (${formatPrice(body.price)}) was added to the menu.`,
+        "success"
+      );
+      await loadMenuItems(body.id);
       return;
     }
 
     if (response.status === 422 && body.errors) {
-      // Mirror the server's per-field messages onto the form.
+      // The server found something the browser checks missed. Mirror its
+      // per-field messages onto the form.
+      let matched = 0;
       for (const [key, message] of Object.entries(body.errors)) {
         const fieldId = FIELD_IDS[key];
         if (fieldId) {
           showFieldError(fieldId, message);
+          matched += 1;
         }
       }
-      showStatus(body.detail || "The menu item could not be saved.", "error");
+      const unmatched = Object.entries(body.errors)
+        .filter(([key]) => !FIELD_IDS[key])
+        .map(([, message]) => message);
+      showStatus(
+        unmatched.length > 0
+          ? unmatched.join(" ")
+          : body.detail || "The menu item could not be saved.",
+        "error"
+      );
+      if (matched > 0) {
+        const firstInvalid = fields.find((fieldId) =>
+          document.getElementById(fieldId).hasAttribute("aria-invalid")
+        );
+        if (firstInvalid) {
+          document.getElementById(firstInvalid).focus();
+        }
+      }
       return;
     }
 
+    showStatus(describeServerFailure(response, body), "error");
+  } catch (error) {
     showStatus(
-      body.detail || `The server returned an error (${response.status}).`,
-      "error"
-    );
-  } catch {
-    showStatus(
-      "Could not reach the server. Check that the API is running on port 8000.",
+      describeNetworkFailure(
+        error,
+        "The item may not have been saved \u2014 check the list below before trying again."
+      ),
       "error"
     );
   } finally {
     setSubmitting(false);
+    if (saved) {
+      // Ready for the next entry.
+      document.getElementById("item-name").focus();
+    }
   }
 });
-
-loadMenuItems();
 
 form.addEventListener("reset", () => {
   clearAllErrors();
   clearStatus();
 });
+
+loadMenuItems();

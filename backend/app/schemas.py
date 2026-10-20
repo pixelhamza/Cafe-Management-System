@@ -26,13 +26,23 @@ class MenuItemCreate(BaseModel):
     category: Category
     price: Decimal = Field(..., gt=0, le=MAX_PRICE, decimal_places=2)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, value: object) -> object:
+        """Trims before max_length is applied.
+
+        A mode="after" validator runs second, so the limit used to be checked
+        against the raw value and a name that fits once its surrounding spaces
+        are gone was rejected as too long.
+        """
+        return value.strip() if isinstance(value, str) else value
+
     @field_validator("name")
     @classmethod
     def name_must_not_be_blank(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
+        if not value:
             raise ValueError("Item name is required")
-        return cleaned
+        return value
 
 
 class MenuItemRead(BaseModel):

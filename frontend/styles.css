@@ -289,3 +289,38 @@ select:disabled {
 .link-button.danger {
   color: var(--error);
 }
+
+/* Delete confirmation dialogue */
+
+#confirm-delete {
+  max-width: 24rem;
+  padding: 1.5rem;
+  color: var(--text);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+#confirm-delete h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+#confirm-delete p {
+  margin: 0;
+}
+
+#confirm-delete::backdrop {
+  background: rgb(43 39 36 / 0.45);
+}
+
+/* Named separately from .link-button.danger so the two cannot collide. */
+button.destructive {
+  background: var(--error);
+  border-color: var(--error);
+}
+
+button.destructive:hover {
+  background: #8f1e17;
+  border-color: #8f1e17;
+}

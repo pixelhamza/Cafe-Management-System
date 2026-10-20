@@ -18,6 +18,8 @@ const editingNote = document.getElementById("editing-note");
 const listStatus = document.getElementById("list-status");
 const menuTable = document.getElementById("menu-table");
 const menuTableBody = document.getElementById("menu-table-body");
+const confirmDialog = document.getElementById("confirm-delete");
+const confirmMessage = document.getElementById("confirm-delete-message");
 
 // Maps a server error key back to the matching form field id.
 const FIELD_IDS = {
@@ -235,7 +237,7 @@ function renderMenuItems(items, newItemId) {
     remove.className = "link-button danger";
     remove.textContent = "Delete";
     remove.setAttribute("aria-label", `Delete ${item.name}`);
-    remove.addEventListener("click", () => deleteItem(item));
+    remove.addEventListener("click", () => askToDelete(item));
 
     actions.append(edit, remove);
 
@@ -268,6 +270,32 @@ async function loadMenuItems(newItemId) {
     listStatus.hidden = false;
   }
 }
+
+// The item waiting on a confirmation, or null when the dialogue is closed.
+let pendingDelete = null;
+
+function askToDelete(item) {
+  if (submitting) {
+    return;
+  }
+  pendingDelete = item;
+  confirmMessage.textContent = `Delete "${item.name}"? This cannot be undone.`;
+  // Escape leaves returnValue untouched, so a stale "delete" from a previous
+  // confirmation would count as a fresh one. Clear it before opening.
+  confirmDialog.returnValue = "";
+  confirmDialog.showModal();
+}
+
+// The dialogue's buttons submit a method="dialog" form, so the choice
+// arrives as returnValue. Escape and the backdrop leave it empty, which
+// means cancel: the item is only deleted on an explicit confirmation.
+confirmDialog.addEventListener("close", () => {
+  const item = pendingDelete;
+  pendingDelete = null;
+  if (item && confirmDialog.returnValue === "delete") {
+    deleteItem(item);
+  }
+});
 
 async function deleteItem(item) {
   if (submitting) {

@@ -102,6 +102,19 @@
     </section>
   </main>
 
+  <!-- Deletion is irreversible, so it goes through a confirmation step.
+       A native <dialog> is used so focus trapping and Escape come free. -->
+  <dialog id="confirm-delete" aria-labelledby="confirm-delete-heading">
+    <h2 id="confirm-delete-heading">Delete menu item</h2>
+    <p id="confirm-delete-message"></p>
+    <form method="dialog" class="actions">
+      <!-- Cancel comes first so it takes focus when the dialog opens;
+           the destructive choice should never be the default. -->
+      <button type="submit" value="cancel" class="secondary">Cancel</button>
+      <button type="submit" value="delete" class="destructive">Delete</button>
+    </form>
+  </dialog>
+
   <script src="app.js"></script>
 </body>
 </html>

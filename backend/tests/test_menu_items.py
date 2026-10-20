@@ -494,6 +494,32 @@ def test_a_name_that_fits_after_trimming_is_accepted_on_update(client):
     assert response.json()["name"] == name
 
 
+def test_adding_an_item_with_a_name_already_in_use_is_rejected(client):
+    _create(client, name="Masala Chai", category="Beverages", price="40.00")
+
+    response = client.post(
+        ENDPOINT,
+        json={"name": "Masala Chai", "category": "Beverages", "price": "40.00"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == 'A menu item named "Masala Chai" already exists.'
+
+
+def test_saving_an_item_without_renaming_it_is_allowed(client):
+    """The duplicate check must not treat an item as a clash with itself,
+    or editing only the price would be impossible."""
+    item = _create(client)
+
+    response = client.put(
+        f"{ENDPOINT}/{item['id']}",
+        json={"name": item["name"], "category": "Beverages", "price": "195.00"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["price"] == "195.00"
+
+
 def test_renaming_onto_an_existing_name_is_rejected(client):
     """Nothing enforces unique names, so an edit can leave the menu holding
     two rows a customer cannot tell apart."""

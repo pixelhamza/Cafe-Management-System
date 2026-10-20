@@ -79,12 +79,28 @@ def _get_or_404(db: Session, item_id: int):
     return record
 
 
+def _reject_duplicate_name(
+    db: Session, name: str, exclude_id: int | None = None
+) -> None:
+    """Two items sharing a name leave rows nobody can tell apart.
+
+    Enforced here rather than as a unique constraint because the table already
+    exists in deployed databases and the project has no migration tool.
+    """
+    if crud.find_by_name(db, name, exclude_id=exclude_id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'A menu item named "{name}" already exists.',
+        )
+
+
 @app.post(
     "/api/menu-items",
     response_model=MenuItemRead,
     status_code=status.HTTP_201_CREATED,
 )
 def create_menu_item(item: MenuItemCreate, db: Session = Depends(get_db)):
+    _reject_duplicate_name(db, item.name)
     return crud.create_menu_item(db, item)
 
 
@@ -93,6 +109,7 @@ def update_menu_item(
     item_id: int, item: MenuItemCreate, db: Session = Depends(get_db)
 ):
     record = _get_or_404(db, item_id)
+    _reject_duplicate_name(db, item.name, exclude_id=item_id)
     return crud.update_menu_item(db, record, item)
 
 

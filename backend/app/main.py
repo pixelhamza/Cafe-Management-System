@@ -94,3 +94,9 @@ def update_menu_item(
 ):
     record = _get_or_404(db, item_id)
     return crud.update_menu_item(db, record, item)
+
+
+@app.delete("/api/menu-items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_menu_item(item_id: int, db: Session = Depends(get_db)) -> None:
+    record = _get_or_404(db, item_id)
+    crud.delete_menu_item(db, record)

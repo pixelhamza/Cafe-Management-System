@@ -229,7 +229,15 @@ function renderMenuItems(items, newItemId) {
     // Name the item so the purpose is clear out of context.
     edit.setAttribute("aria-label", `Edit ${item.name}`);
     edit.addEventListener("click", () => startEditing(item));
-    actions.append(edit);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "link-button danger";
+    remove.textContent = "Delete";
+    remove.setAttribute("aria-label", `Delete ${item.name}`);
+    remove.addEventListener("click", () => deleteItem(item));
+
+    actions.append(edit, remove);
 
     row.append(name, category, price, actions);
     if (item.id === newItemId) {
@@ -258,6 +266,29 @@ async function loadMenuItems(newItemId) {
     listStatus.textContent = message;
     listStatus.className = "status error";
     listStatus.hidden = false;
+  }
+}
+
+async function deleteItem(item) {
+  if (submitting) {
+    return;
+  }
+  try {
+    const { response, body } = await requestJson(`/api/menu-items/${item.id}`, {
+      method: "DELETE",
+    });
+    if (response.status === 204) {
+      // Editing the row that just vanished would PUT to a dead id.
+      if (editingId === item.id) {
+        form.reset();
+        enterAddMode();
+      }
+      await loadMenuItems();
+      return;
+    }
+    showStatus(describeServerFailure(response, body), "error");
+  } catch (error) {
+    showStatus(describeNetworkFailure(error), "error");
   }
 }
 

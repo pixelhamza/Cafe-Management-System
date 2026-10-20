@@ -285,3 +285,7 @@ select:disabled {
   font-weight: 600;
   color: var(--accent);
 }
+
+.link-button.danger {
+  color: var(--error);
+}

@@ -30,6 +30,11 @@ def update_menu_item(db: Session, record: MenuItem, item: MenuItemCreate) -> Men
     return record
 
 
+def delete_menu_item(db: Session, record: MenuItem) -> None:
+    db.delete(record)
+    db.commit()
+
+
 def list_menu_items(db: Session) -> list[MenuItem]:
     statement = select(MenuItem).order_by(MenuItem.created_at.desc(), MenuItem.id.desc())
     return list(db.scalars(statement))

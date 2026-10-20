@@ -311,6 +311,8 @@ async function deleteItem(item) {
         form.reset();
         enterAddMode();
       }
+      // After form.reset(), which clears the status on its way through.
+      showStatus(`${item.name} was removed from the menu.`, "success");
       await loadMenuItems();
       return;
     }

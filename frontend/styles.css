@@ -324,3 +324,67 @@ button.destructive:hover {
   background: #8f1e17;
   border-color: #8f1e17;
 }
+
+/* Section navigation in the page header */
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.85rem;
+  font-size: 0.95rem;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding-bottom: 0.2rem;
+  border-bottom: 2px solid transparent;
+}
+
+.site-nav a:hover {
+  color: var(--text);
+}
+
+.site-nav a[aria-current="page"] {
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+.site-nav a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* Order summary table: the total sits in a tfoot, so the last item row keeps
+   its rule rather than running straight into the total. */
+#order-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--border);
+}
+
+.order-total th,
+.order-total td {
+  border-bottom: none;
+  padding-top: 0.8rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+#empty-order-note {
+  margin: 0;
+}
+
+/* These buttons are disabled because there is nothing to act on yet, not
+   because a request is in flight, so the global progress cursor is wrong. */
+#add-line-button:disabled,
+#place-order-button:disabled,
+#clear-order-button:disabled {
+  cursor: not-allowed;
+}

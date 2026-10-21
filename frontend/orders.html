@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cafe Management System — New Order</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Cafe Management System</h1>
+    <p class="subtitle">Order and Billing</p>
+    <nav class="site-nav" aria-label="Sections">
+      <a href="index.html">Menu</a>
+      <a href="orders.html" aria-current="page">New order</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Picking items is its own form so that pressing Enter in the quantity
+         box adds a line rather than placing the whole order. -->
+    <section class="card" aria-labelledby="add-items-heading">
+      <h2 id="add-items-heading">Add items to the order</h2>
+
+      <div id="menu-status" class="status" role="status" aria-live="polite" hidden></div>
+
+      <form id="add-line-form" novalidate>
+        <div class="field">
+          <label for="order-item">Menu item <span class="required" aria-hidden="true">*</span></label>
+          <select
+            id="order-item"
+            name="menu_item_id"
+            required
+            aria-required="true"
+            aria-describedby="order-item-error">
+            <option value="">Select an item</option>
+          </select>
+          <p id="order-item-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="order-quantity">Quantity <span class="required" aria-hidden="true">*</span></label>
+          <input
+            type="number"
+            id="order-quantity"
+            name="quantity"
+            min="1"
+            max="99"
+            step="1"
+            value="1"
+            inputmode="numeric"
+            required
+            aria-required="true"
+            aria-describedby="order-quantity-hint order-quantity-error">
+          <p id="order-quantity-hint" class="hint">Whole number, 1 to 99</p>
+          <p id="order-quantity-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="add-line-button">Add to order</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="summary-heading">
+      <h2 id="summary-heading">Order summary</h2>
+
+      <div id="form-status" class="status" role="status" aria-live="polite" hidden></div>
+
+      <form id="order-form" novalidate>
+        <div class="field">
+          <label for="order-customer">Customer name <span class="optional">(optional)</span></label>
+          <input
+            type="text"
+            id="order-customer"
+            name="customer_name"
+            maxlength="100"
+            autocomplete="off"
+            aria-describedby="order-customer-hint order-customer-error">
+          <p id="order-customer-hint" class="hint">Used to label the bill. Leave blank for a counter sale.</p>
+          <p id="order-customer-error" class="error" role="alert" hidden></p>
+        </div>
+
+        <p id="empty-order-note" class="hint">No items in this order yet. Add one above.</p>
+
+        <table id="order-table" hidden>
+          <caption class="visually-hidden">Items in this order</caption>
+          <thead>
+            <tr>
+              <th scope="col">Item</th>
+              <th scope="col" class="numeric">Unit price</th>
+              <th scope="col" class="numeric">Qty</th>
+              <th scope="col" class="numeric">Line total</th>
+              <th scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody id="order-table-body"></tbody>
+          <tfoot>
+            <tr class="order-total">
+              <th scope="row" colspan="3">Total</th>
+              <!-- Announced so the running total is not a visual-only change. -->
+              <td id="order-total" class="numeric" aria-live="polite">&#8377;0.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="actions">
+          <button type="submit" id="place-order-button" disabled>Place order</button>
+          <button type="reset" id="clear-order-button" class="secondary" disabled>Clear order</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script src="orders.js"></script>
+</body>
+</html>

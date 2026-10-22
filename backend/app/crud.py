@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import MenuItem, Order, OrderItem
-from .schemas import MenuItemCreate, OrderCreate
+from .schemas import GST_PERCENT, MenuItemCreate, OrderCreate
 
 
 def create_menu_item(db: Session, item: MenuItemCreate) -> MenuItem:
@@ -68,11 +68,12 @@ def create_order(
     """Saves an order and its lines in one transaction.
 
     The item name and unit price are copied onto each line rather than read
-    through the menu item, so a bill keeps showing what was actually charged
-    after the menu changes.
+    through the menu item, and the GST rate is copied onto the order, so a bill
+    keeps showing what was actually charged after the menu or the rate changes.
     """
     record = Order(
         customer_name=order.customer_name,
+        tax_percent=GST_PERCENT,
         items=[
             OrderItem(
                 menu_item_id=line.menu_item_id,

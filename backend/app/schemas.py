@@ -19,6 +19,11 @@ MAX_CUSTOMER_NAME_LENGTH = 100
 MAX_QUANTITY = 99
 TWO_PLACES = Decimal("0.01")
 
+# GST charged on a cafe bill, as a percentage. Stored per order as well (see
+# models.Order.tax_percent) so that changing this figure never alters a bill
+# that has already been issued.
+GST_PERCENT = Decimal("5.00")
+
 
 class Category(str, Enum):
     BEVERAGES = "Beverages"
@@ -116,14 +121,28 @@ class OrderLineRead(BaseModel):
 
 
 class OrderRead(BaseModel):
+    """An order with its charges broken out.
+
+    subtotal is the items, tax is the GST on them at tax_percent, and total is
+    what the customer actually pays.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     customer_name: str | None
     created_at: datetime
     items: list[OrderLineRead]
+    subtotal: Decimal
+    tax_percent: Decimal
+    tax: Decimal
     total: Decimal
 
-    @field_serializer("total")
-    def serialize_total(self, total: Decimal) -> str:
-        return str(total.quantize(TWO_PLACES))
+    @field_serializer("subtotal", "tax", "total")
+    def serialize_money(self, amount: Decimal) -> str:
+        return str(amount.quantize(TWO_PLACES))
+
+    @field_serializer("tax_percent")
+    def serialize_tax_percent(self, percent: Decimal) -> str:
+        """Sent as a number, not "5%", so the screen can label it itself."""
+        return str(percent.quantize(TWO_PLACES))

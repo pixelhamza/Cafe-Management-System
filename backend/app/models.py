@@ -1,7 +1,7 @@
 """Database tables."""
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, TypeDecorator, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -50,6 +50,10 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # Blank for a counter sale, so the bill is simply unlabelled.
     customer_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The GST rate this bill was charged at, copied in at the time of sale for
+    # the same reason the lines copy their price: a past bill must not change
+    # when the rate does.
+    tax_percent: Mapped[Decimal] = mapped_column(DecimalText, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -61,13 +65,29 @@ class Order(Base):
     )
 
     @property
-    def total(self) -> Decimal:
-        """Summed in Python, deliberately.
+    def subtotal(self) -> Decimal:
+        """The items alone, summed in Python, deliberately.
 
         The price column is text (see DecimalText), so SQL SUM() would add
         strings together as floats. Decimal addition here stays exact.
         """
         return sum((item.line_total for item in self.items), Decimal("0.00"))
+
+    @property
+    def tax(self) -> Decimal:
+        """GST on the subtotal, rounded to paise.
+
+        ROUND_HALF_UP is named explicitly because Decimal rounds half to even
+        by default, which would charge 18.06 on a 361.30 subtotal where a
+        customer reading the bill expects 18.07.
+        """
+        charged = self.subtotal * self.tax_percent / Decimal("100")
+        return charged.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+    @property
+    def total(self) -> Decimal:
+        """What the customer pays: the items plus the tax on them."""
+        return self.subtotal + self.tax
 
 
 class OrderItem(Base):

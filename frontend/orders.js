@@ -1,7 +1,8 @@
 // Create Customer Order form.
-// This subtask builds the form and the running order only. Nothing is saved
-// yet: placing the order is wired up in the next subtask, and the full
-// validation rules (mirroring backend/app/schemas.py) arrive in the one after.
+// The form builds a running order and placing it saves the order through
+// POST /api/orders. The full validation rules (mirroring
+// backend/app/schemas.py) arrive in the next subtask, as does the printable
+// bill; for now a saved order is confirmed in the status banner.
 
 const API_BASE = "http://localhost:8000";
 
@@ -18,6 +19,7 @@ const quantityInput = document.getElementById("order-quantity");
 const addLineButton = document.getElementById("add-line-button");
 const menuStatus = document.getElementById("menu-status");
 const orderForm = document.getElementById("order-form");
+const customerInput = document.getElementById("order-customer");
 const formStatus = document.getElementById("form-status");
 const orderTable = document.getElementById("order-table");
 const orderTableBody = document.getElementById("order-table-body");
@@ -34,6 +36,10 @@ const menuItems = new Map();
 // The order being built, one entry per distinct menu item:
 // { menuItemId, name, unitPaise, quantity }
 let lines = [];
+
+// Guards against a second request while the first is still in flight, which
+// would otherwise save the same order twice.
+let submitting = false;
 
 function showStatus(element, message, kind) {
   element.textContent = message;
@@ -152,8 +158,8 @@ function renderOrder() {
   const hasLines = lines.length > 0;
   orderTable.hidden = !hasLines;
   emptyOrderNote.hidden = hasLines;
-  placeOrderButton.disabled = !hasLines;
-  clearOrderButton.disabled = !hasLines;
+  placeOrderButton.disabled = !hasLines || submitting;
+  clearOrderButton.disabled = !hasLines || submitting;
   orderTotal.textContent = formatPaise(totalPaise());
 }
 
@@ -277,13 +283,84 @@ addLineForm.addEventListener("submit", (event) => {
   itemSelect.focus();
 });
 
-orderForm.addEventListener("submit", (event) => {
+async function placeOrder() {
+  const payload = {
+    customer_name: customerInput.value.trim(),
+    items: lines.map((line) => ({
+      menu_item_id: line.menuItemId,
+      quantity: line.quantity,
+    })),
+  };
+
+  const { response, body } = await requestJson("/api/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (response.status === 201) {
+    return body;
+  }
+  if (response.status === 422 && body.errors) {
+    throw Object.assign(new Error("validation"), { response, body });
+  }
+  throw Object.assign(new Error("http"), { response, body });
+}
+
+orderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  showStatus(
-    formStatus,
-    "This order is not saved yet — saving arrives in the next subtask.",
-    null
-  );
+  if (submitting || lines.length === 0) {
+    return;
+  }
+
+  clearFieldError("order-customer");
+  clearStatus(formStatus);
+
+  submitting = true;
+  placeOrderButton.disabled = true;
+  placeOrderButton.textContent = "Placing order…";
+
+  try {
+    const order = await placeOrder();
+    // Clearing the lines also re-disables the buttons, so the saved order
+    // cannot be placed a second time by accident.
+    lines = [];
+    customerInput.value = "";
+    renderOrder();
+    const who = order.customer_name ? ` for ${order.customer_name}` : "";
+    showStatus(
+      formStatus,
+      `Order #${order.id}${who} saved. Total ₹${order.total}.`,
+      "success"
+    );
+  } catch (error) {
+    if (!error.response) {
+      showStatus(formStatus, describeNetworkFailure(error), "error");
+    } else if (error.message === "validation") {
+      // Until the validation subtask maps these onto fields, the server's
+      // summary is better than nothing.
+      showStatus(
+        formStatus,
+        error.body.detail || "The order could not be saved.",
+        "error"
+      );
+    } else {
+      showStatus(
+        formStatus,
+        describeServerFailure(error.response, error.body),
+        "error"
+      );
+      if (error.response.status === 404) {
+        // The menu changed under us; reload the picker so the stale option
+        // cannot be chosen again.
+        loadMenuItems();
+      }
+    }
+  } finally {
+    submitting = false;
+    placeOrderButton.textContent = "Place order";
+    renderOrder();
+  }
 });
 
 orderForm.addEventListener("reset", () => {

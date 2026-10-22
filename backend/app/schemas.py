@@ -1,10 +1,13 @@
-"""Request and response shapes for menu items.
+"""Request and response shapes for menu items and orders.
 
-These rules are the single source of truth for what a valid menu item is.
-The browser repeats the same checks in frontend/app.js so the user gets
-immediate feedback, but the server never trusts that and re-validates here.
+These rules are the single source of truth for what a valid menu item and
+a valid order are.
+The browser repeats the same checks in frontend/app.js and frontend/orders.js
+so the user gets immediate feedback, but the server never trusts that and
+re-validates here.
 """
 
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
@@ -12,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 
 MAX_NAME_LENGTH = 100
 MAX_PRICE = Decimal("100000.00")
+MAX_CUSTOMER_NAME_LENGTH = 100
+MAX_QUANTITY = 99
+TWO_PLACES = Decimal("0.01")
 
 
 class Category(str, Enum):
@@ -56,4 +62,68 @@ class MenuItemRead(BaseModel):
     @field_serializer("price")
     def serialize_price(self, price: Decimal) -> str:
         """Always render money with two decimal places."""
-        return str(price.quantize(Decimal("0.01")))
+        return str(price.quantize(TWO_PLACES))
+
+
+class OrderLineCreate(BaseModel):
+    menu_item_id: int = Field(..., gt=0)
+    quantity: int = Field(..., ge=1, le=MAX_QUANTITY)
+
+
+class OrderCreate(BaseModel):
+    customer_name: str | None = Field(
+        default=None, max_length=MAX_CUSTOMER_NAME_LENGTH
+    )
+    items: list[OrderLineCreate] = Field(..., min_length=1)
+
+    @field_validator("customer_name", mode="before")
+    @classmethod
+    def blank_name_means_none(cls, value: object) -> object:
+        """A counter sale arrives as an empty box, not as a missing field."""
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+    @field_validator("items")
+    @classmethod
+    def one_line_per_menu_item(
+        cls, items: list[OrderLineCreate]
+    ) -> list[OrderLineCreate]:
+        """Keeps a bill from listing the same item on two lines.
+
+        The browser raises the quantity of an existing line instead of adding
+        a second one; this is the same rule, enforced server-side.
+        """
+        seen = {item.menu_item_id for item in items}
+        if len(seen) != len(items):
+            raise ValueError("Each menu item may appear only once in an order")
+        return items
+
+
+class OrderLineRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    menu_item_id: int
+    item_name: str
+    unit_price: Decimal
+    quantity: int
+    line_total: Decimal
+
+    @field_serializer("unit_price", "line_total")
+    def serialize_money(self, amount: Decimal) -> str:
+        return str(amount.quantize(TWO_PLACES))
+
+
+class OrderRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    customer_name: str | None
+    created_at: datetime
+    items: list[OrderLineRead]
+    total: Decimal
+
+    @field_serializer("total")
+    def serialize_total(self, total: Decimal) -> str:
+        return str(total.quantize(TWO_PLACES))

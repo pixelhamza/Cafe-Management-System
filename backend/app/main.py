@@ -13,14 +13,20 @@ from sqlalchemy.orm import Session
 from . import crud
 from .database import Base, engine, get_db
 from .errors import request_validation_handler
-from .schemas import Category, MenuItemCreate, MenuItemRead
+from .schemas import (
+    Category,
+    MenuItemCreate,
+    MenuItemRead,
+    OrderCreate,
+    OrderRead,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create the table if it is missing. The app still starts when the
+    # Create any missing tables. The app still starts when the
     # database is unreachable; requests then fail with a clear 503.
     try:
         Base.metadata.create_all(bind=engine)
@@ -30,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cafe Management System API", version="0.2.0", lifespan=lifespan
+    title="Cafe Management System API", version="0.3.0", lifespan=lifespan
 )
 
 # The frontend is served as static files from a different port in development.
@@ -117,3 +123,27 @@ def update_menu_item(
 def delete_menu_item(item_id: int, db: Session = Depends(get_db)) -> None:
     record = _get_or_404(db, item_id)
     crud.delete_menu_item(db, record)
+
+
+@app.post(
+    "/api/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED
+)
+def create_order(order: OrderCreate, db: Session = Depends(get_db)):
+    menu_items = crud.find_menu_items(
+        db, [line.menu_item_id for line in order.items]
+    )
+    missing = [
+        line.menu_item_id
+        for line in order.items
+        if line.menu_item_id not in menu_items
+    ]
+    if missing:
+        # The picker was loaded before the item was deleted on the Menu page.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "One of the items in this order no longer exists on the menu. "
+                "Reload the page and build the order again."
+            ),
+        )
+    return crud.create_order(db, order, menu_items)

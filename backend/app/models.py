@@ -3,13 +3,11 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, String, Text, TypeDecorator, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, TypeDecorator, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
-from .schemas import MAX_NAME_LENGTH
-
-TWO_PLACES = Decimal("0.01")
+from .schemas import MAX_NAME_LENGTH, TWO_PLACES
 
 
 class DecimalText(TypeDecorator):
@@ -44,3 +42,52 @@ class MenuItem(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class Order(Base):
+    __tablename__ = "orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Blank for a counter sale, so the bill is simply unlabelled.
+    customer_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    items: Mapped[list["OrderItem"]] = relationship(
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderItem.id",
+    )
+
+    @property
+    def total(self) -> Decimal:
+        """Summed in Python, deliberately.
+
+        The price column is text (see DecimalText), so SQL SUM() would add
+        strings together as floats. Decimal addition here stays exact.
+        """
+        return sum((item.line_total for item in self.items), Decimal("0.00"))
+
+
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=False
+    )
+    # The menu item this line came from, kept for reference only. Plain integer
+    # rather than a foreign key: the name and price below are copied at the
+    # time of sale, so a past bill must survive its menu item being edited or
+    # deleted, and a real constraint would block that deletion instead.
+    menu_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), nullable=False)
+    unit_price: Mapped[Decimal] = mapped_column(DecimalText, nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    order: Mapped[Order] = relationship(back_populates="items")
+
+    @property
+    def line_total(self) -> Decimal:
+        return (self.unit_price * self.quantity).quantize(TWO_PLACES)

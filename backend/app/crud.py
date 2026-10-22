@@ -1,10 +1,10 @@
-"""Database reads and writes for menu items."""
+"""Database reads and writes for menu items and orders."""
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import MenuItem
-from .schemas import MenuItemCreate
+from .models import MenuItem, Order, OrderItem
+from .schemas import MenuItemCreate, OrderCreate
 
 
 def create_menu_item(db: Session, item: MenuItemCreate) -> MenuItem:
@@ -50,3 +50,40 @@ def delete_menu_item(db: Session, record: MenuItem) -> None:
 def list_menu_items(db: Session) -> list[MenuItem]:
     statement = select(MenuItem).order_by(MenuItem.created_at.desc(), MenuItem.id.desc())
     return list(db.scalars(statement))
+
+
+def find_menu_items(db: Session, item_ids: list[int]) -> dict[int, MenuItem]:
+    """Fetches the ordered items in one query, keyed by id.
+
+    Ids with no row are simply absent from the result; the caller decides
+    what to do about them.
+    """
+    statement = select(MenuItem).where(MenuItem.id.in_(item_ids))
+    return {record.id: record for record in db.scalars(statement)}
+
+
+def create_order(
+    db: Session, order: OrderCreate, menu_items: dict[int, MenuItem]
+) -> Order:
+    """Saves an order and its lines in one transaction.
+
+    The item name and unit price are copied onto each line rather than read
+    through the menu item, so a bill keeps showing what was actually charged
+    after the menu changes.
+    """
+    record = Order(
+        customer_name=order.customer_name,
+        items=[
+            OrderItem(
+                menu_item_id=line.menu_item_id,
+                item_name=menu_items[line.menu_item_id].name,
+                unit_price=menu_items[line.menu_item_id].price,
+                quantity=line.quantity,
+            )
+            for line in order.items
+        ],
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record

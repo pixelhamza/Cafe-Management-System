@@ -1,12 +1,23 @@
 // Create Customer Order form.
 // The form builds a running order and placing it saves the order through
-// POST /api/orders. The full validation rules (mirroring
-// backend/app/schemas.py) arrive in the next subtask, as does the printable
-// bill; for now a saved order is confirmed in the status banner.
+// POST /api/orders. The checks below mirror backend/app/schemas.py so the
+// user hears about a problem immediately; the server re-validates regardless
+// and its per-field messages are painted back onto the form. The printable
+// bill arrives in the next subtask; for now a saved order is confirmed in the
+// status banner.
 
 const API_BASE = "http://localhost:8000";
 
+// Mirrors of the limits in backend/app/schemas.py. Change a rule there and
+// you must change it here too.
 const MAX_QUANTITY = 99;
+const MAX_CUSTOMER_NAME_LENGTH = 100;
+
+// Maps a server error key back to the matching form field id. Keys with no
+// field here (items, non_field) are shown in the status banner instead.
+const FIELD_IDS = {
+  customer_name: "order-customer",
+};
 
 // These helpers are deliberate copies of the ones in app.js. Extracting them
 // into a shared common.js would touch Module 1 code, which has no automated
@@ -81,6 +92,48 @@ function formatPaise(paise) {
 
 function totalPaise() {
   return lines.reduce((sum, line) => sum + line.unitPaise * line.quantity, 0);
+}
+
+// --- validation, mirroring backend/app/schemas.py ------------------------
+
+// OrderLineCreate.menu_item_id: must name an item the menu actually has.
+function validateMenuItemChoice(value) {
+  if (!value) {
+    return "Choose a menu item";
+  }
+  if (!menuItems.has(Number(value))) {
+    return "That item is no longer on the menu. Reload the page.";
+  }
+  return null;
+}
+
+// OrderLineCreate.quantity: an integer from 1 to MAX_QUANTITY.
+function validateQuantity(value) {
+  const quantity = value.trim();
+  if (!quantity) {
+    return "Quantity is required";
+  }
+  // A leading + is allowed because the server's int parsing accepts it, and
+  // the two sides must agree on what counts as a whole number.
+  if (!/^\+?\d+$/.test(quantity)) {
+    return `Quantity must be a whole number between 1 and ${MAX_QUANTITY}`;
+  }
+  const parsed = Number(quantity);
+  if (parsed < 1) {
+    return "Quantity must be at least 1";
+  }
+  if (parsed > MAX_QUANTITY) {
+    return `Quantity must not exceed ${MAX_QUANTITY}`;
+  }
+  return null;
+}
+
+// OrderCreate.customer_name: optional, and short enough to label a bill.
+function validateCustomerName(value) {
+  if (value.trim().length > MAX_CUSTOMER_NAME_LENGTH) {
+    return `Customer name must be ${MAX_CUSTOMER_NAME_LENGTH} characters or fewer`;
+  }
+  return null;
 }
 
 // Wraps fetch with a timeout so a hung request cannot leave the page waiting
@@ -254,26 +307,22 @@ addLineForm.addEventListener("submit", (event) => {
   lineFields.forEach(clearFieldError);
   clearStatus(formStatus);
 
-  // Just enough checking to keep unusable values out of the order. The full
-  // rules, shared with the server, belong to the validation subtask.
-  const menuItem = menuItems.get(Number(itemSelect.value));
-  if (!menuItem) {
-    showFieldError("order-item", "Choose a menu item");
+  const choiceError = validateMenuItemChoice(itemSelect.value);
+  if (choiceError) {
+    showFieldError("order-item", choiceError);
     itemSelect.focus();
     return;
   }
 
-  const quantity = Number(quantityInput.value);
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
-    showFieldError(
-      "order-quantity",
-      `Quantity must be a whole number between 1 and ${MAX_QUANTITY}`
-    );
+  const quantityError = validateQuantity(quantityInput.value);
+  if (quantityError) {
+    showFieldError("order-quantity", quantityError);
     quantityInput.focus();
     return;
   }
 
-  if (!addLine(menuItem, quantity)) {
+  const menuItem = menuItems.get(Number(itemSelect.value));
+  if (!addLine(menuItem, Number(quantityInput.value))) {
     quantityInput.focus();
     return;
   }
@@ -309,12 +358,28 @@ async function placeOrder() {
 
 orderForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (submitting || lines.length === 0) {
+  // Ignore repeat submits (double click, Enter key) while one is in flight.
+  if (submitting) {
     return;
   }
 
   clearFieldError("order-customer");
   clearStatus(formStatus);
+
+  // OrderCreate.items: an order must have something on it.
+  if (lines.length === 0) {
+    showStatus(formStatus, "Add at least one item to the order.", "error");
+    itemSelect.focus();
+    return;
+  }
+
+  const customerError = validateCustomerName(customerInput.value);
+  if (customerError) {
+    showFieldError("order-customer", customerError);
+    showStatus(formStatus, "Please fix the field below.", "error");
+    customerInput.focus();
+    return;
+  }
 
   submitting = true;
   placeOrderButton.disabled = true;
@@ -337,13 +402,30 @@ orderForm.addEventListener("submit", async (event) => {
     if (!error.response) {
       showStatus(formStatus, describeNetworkFailure(error), "error");
     } else if (error.message === "validation") {
-      // Until the validation subtask maps these onto fields, the server's
-      // summary is better than nothing.
+      // The server found something the browser checks missed. Mirror its
+      // per-field messages onto the form, and show anything that belongs to
+      // the order as a whole in the banner.
+      const unmatched = [];
+      let firstInvalid = null;
+      for (const [key, message] of Object.entries(error.body.errors)) {
+        const fieldId = FIELD_IDS[key];
+        if (fieldId) {
+          showFieldError(fieldId, message);
+          firstInvalid = firstInvalid || fieldId;
+        } else {
+          unmatched.push(message);
+        }
+      }
       showStatus(
         formStatus,
-        error.body.detail || "The order could not be saved.",
+        unmatched.length > 0
+          ? unmatched.join(" ")
+          : error.body.detail || "The order could not be saved.",
         "error"
       );
+      if (firstInvalid) {
+        document.getElementById(firstInvalid).focus();
+      }
     } else {
       showStatus(
         formStatus,
@@ -361,6 +443,10 @@ orderForm.addEventListener("submit", async (event) => {
     placeOrderButton.textContent = "Place order";
     renderOrder();
   }
+});
+
+customerInput.addEventListener("input", () => {
+  clearFieldError("order-customer");
 });
 
 orderForm.addEventListener("reset", () => {

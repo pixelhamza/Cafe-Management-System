@@ -12,6 +12,10 @@ const API_BASE = "http://localhost:8000";
 // you must change it here too.
 const MAX_QUANTITY = 99;
 const MAX_CUSTOMER_NAME_LENGTH = 100;
+// Mirrors schemas.GST_PERCENT. The server stamps its own rate onto the order
+// and returns the figures it charged, so this is only for the running total
+// shown while the order is being built.
+const GST_PERCENT = 5;
 
 // Maps a server error key back to the matching form field id. Keys with no
 // field here (items, non_field) are shown in the status banner instead.
@@ -34,6 +38,9 @@ const customerInput = document.getElementById("order-customer");
 const formStatus = document.getElementById("form-status");
 const orderTable = document.getElementById("order-table");
 const orderTableBody = document.getElementById("order-table-body");
+const orderSubtotal = document.getElementById("order-subtotal");
+const orderTax = document.getElementById("order-tax");
+const orderTaxLabel = document.getElementById("order-tax-label");
 const orderTotal = document.getElementById("order-total");
 const emptyOrderNote = document.getElementById("empty-order-note");
 const placeOrderButton = document.getElementById("place-order-button");
@@ -90,8 +97,16 @@ function formatPaise(paise) {
   return `₹${(paise / 100).toFixed(2)}`;
 }
 
-function totalPaise() {
-  return lines.reduce((sum, line) => sum + line.unitPaise * line.quantity, 0);
+// The three figures the summary shows, mirroring the subtotal / tax / total
+// properties on models.Order. Math.round is half-up for positive values, which
+// is the rounding the server applies, so 361.30 is taxed 18.07 on both sides.
+function charges() {
+  const subtotal = lines.reduce(
+    (sum, line) => sum + line.unitPaise * line.quantity,
+    0
+  );
+  const tax = Math.round((subtotal * GST_PERCENT) / 100);
+  return { subtotal, tax, total: subtotal + tax };
 }
 
 // --- validation, mirroring backend/app/schemas.py ------------------------
@@ -213,7 +228,11 @@ function renderOrder() {
   emptyOrderNote.hidden = hasLines;
   placeOrderButton.disabled = !hasLines || submitting;
   clearOrderButton.disabled = !hasLines || submitting;
-  orderTotal.textContent = formatPaise(totalPaise());
+  const { subtotal, tax, total } = charges();
+  orderSubtotal.textContent = formatPaise(subtotal);
+  orderTaxLabel.textContent = `GST (${GST_PERCENT}%)`;
+  orderTax.textContent = formatPaise(tax);
+  orderTotal.textContent = formatPaise(total);
 }
 
 // Adding an item already in the order raises its quantity instead of opening
@@ -393,9 +412,13 @@ orderForm.addEventListener("submit", async (event) => {
     customerInput.value = "";
     renderOrder();
     const who = order.customer_name ? ` for ${order.customer_name}` : "";
+    // The server's own figures, not the browser's, so the confirmation quotes
+    // what was actually charged.
     showStatus(
       formStatus,
-      `Order #${order.id}${who} saved. Total ₹${order.total}.`,
+      `Order #${order.id}${who} saved. ₹${order.subtotal} plus ` +
+        `₹${order.tax} GST at ${Number(order.tax_percent)}% — ` +
+        `total ₹${order.total}.`,
       "success"
     );
   } catch (error) {

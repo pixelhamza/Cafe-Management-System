@@ -96,9 +96,23 @@
           </thead>
           <tbody id="order-table-body"></tbody>
           <tfoot>
+            <tr class="order-charge">
+              <th scope="row" colspan="3">Subtotal</th>
+              <td id="order-subtotal" class="numeric">&#8377;0.00</td>
+              <td></td>
+            </tr>
+            <tr class="order-charge">
+              <!-- The rate is written in by orders.js, from the one constant
+                   that mirrors the server, rather than spelled out here. -->
+              <th scope="row" colspan="3" id="order-tax-label">GST</th>
+              <td id="order-tax" class="numeric">&#8377;0.00</td>
+              <td></td>
+            </tr>
             <tr class="order-total">
-              <th scope="row" colspan="3">Total</th>
-              <!-- Announced so the running total is not a visual-only change. -->
+              <th scope="row" colspan="3">Total payable</th>
+              <!-- Announced so the running total is not a visual-only change.
+                   Only this row is live: hearing all three recited on every
+                   keystroke would be noise. -->
               <td id="order-total" class="numeric" aria-live="polite">&#8377;0.00</td>
               <td></td>
             </tr>

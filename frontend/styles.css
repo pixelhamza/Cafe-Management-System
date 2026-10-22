@@ -366,8 +366,27 @@ button.destructive:hover {
   border-bottom: 1px solid var(--border);
 }
 
+/* The charge rows read as working figures; only the payable total is loud. */
+.order-charge th,
+.order-charge td {
+  border-bottom: none;
+  padding-top: 0.4rem;
+  padding-bottom: 0.1rem;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.order-charge:first-child th,
+.order-charge:first-child td {
+  padding-top: 0.8rem;
+}
+
 .order-total th,
 .order-total td {
+  border-top: 1px solid var(--border);
   border-bottom: none;
   padding-top: 0.8rem;
   font-size: 1rem;

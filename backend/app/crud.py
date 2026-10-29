@@ -52,6 +52,10 @@ def list_menu_items(db: Session) -> list[MenuItem]:
     return list(db.scalars(statement))
 
 
+def get_order(db: Session, order_id: int) -> Order | None:
+    return db.get(Order, order_id)
+
+
 def find_menu_items(db: Session, item_ids: list[int]) -> dict[int, MenuItem]:
     """Fetches the ordered items in one query, keyed by id.
 

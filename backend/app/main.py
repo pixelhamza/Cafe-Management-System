@@ -125,6 +125,21 @@ def delete_menu_item(item_id: int, db: Session = Depends(get_db)) -> None:
     crud.delete_menu_item(db, record)
 
 
+def _get_order_or_404(db: Session, order_id: int):
+    record = crud.get_order(db, order_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="That bill no longer exists. It may have been deleted.",
+        )
+    return record
+
+
+@app.get("/api/orders/{order_id}", response_model=OrderRead)
+def get_order(order_id: int, db: Session = Depends(get_db)):
+    return _get_order_or_404(db, order_id)
+
+
 @app.post(
     "/api/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED
 )

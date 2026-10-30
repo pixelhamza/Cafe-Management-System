@@ -3,9 +3,9 @@
 A simple cafe management system built as a college PBL project.
 
 - **Frontend:** HTML, CSS, vanilla JavaScript
-- **Backend:** Python + FastAPI *(not implemented yet)*
-- **Database:** PostgreSQL *(not implemented yet)*
-- **Tests:** pytest *(not implemented yet)*
+- **Backend:** Python + FastAPI 
+- **Database:** Sqlite 
+- **Tests:** pytest 
 
 ## Modules
 

@@ -17,7 +17,7 @@ os.environ["DATABASE_PATH"] = str(TEST_DB_PATH)
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.database import Base, engine  # noqa: E402
+from app.database import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 # Fail loudly rather than risk writing to the real database.
@@ -40,3 +40,17 @@ def client() -> TestClient:
 @pytest.fixture
 def valid_item() -> dict:
     return {"name": "Cappuccino", "category": "Beverages", "price": "180.50"}
+
+
+@pytest.fixture
+def db_session():
+    """A raw session, for white-box tests that call crud/model code directly
+    instead of going through the HTTP layer."""
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=engine)

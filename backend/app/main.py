@@ -2,11 +2,13 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -22,6 +24,9 @@ from .schemas import (
 )
 
 logger = logging.getLogger("uvicorn.error")
+
+# backend/app/main.py -> backend/ -> repo root -> frontend/
+FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
 
 @asynccontextmanager
@@ -162,3 +167,10 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
             ),
         )
     return crud.create_order(db, order, menu_items)
+
+
+# Mounted last so it only catches requests the routes above did not already
+# handle. html=True serves index.html for "/" and for unknown paths, so
+# refreshing the browser on e.g. /orders.html still resolves correctly.
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

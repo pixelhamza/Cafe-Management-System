@@ -2,7 +2,10 @@
 // The validation here mirrors backend/app/schemas.py so the user gets
 // immediate feedback. The server re-validates everything regardless.
 
-const API_BASE = "http://localhost:8000";
+// In local dev (run.sh) the frontend is served separately on :5500 and the
+// API on :8000. Anywhere else - including the deployed site - frontend and
+// API are served from the same origin, so a relative path is correct.
+const API_BASE = window.location.port === "5500" ? "http://localhost:8000" : "";
 
 const MAX_NAME_LENGTH = 100;
 const MAX_PRICE = 100000;
@@ -173,10 +176,7 @@ function describeNetworkFailure(error, timeoutNote = "") {
     const note = timeoutNote ? ` ${timeoutNote}` : "";
     return `The server took too long to respond.${note}`;
   }
-  return (
-    "Could not reach the server. Check that the API is running on " +
-    "http://localhost:8000 and try again."
-  );
+  return "Could not reach the server. Check your connection and try again.";
 }
 
 // The server replied, but with an error status.

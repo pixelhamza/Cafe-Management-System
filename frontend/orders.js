@@ -6,7 +6,10 @@
 // bill arrives in the next subtask; for now a saved order is confirmed in the
 // status banner.
 
-const API_BASE = "http://localhost:8000";
+// In local dev (run.sh) the frontend is served separately on :5500 and the
+// API on :8000. Anywhere else - including the deployed site - frontend and
+// API are served from the same origin, so a relative path is correct.
+const API_BASE = window.location.port === "5500" ? "http://localhost:8000" : "";
 
 // Mirrors of the limits in backend/app/schemas.py. Change a rule there and
 // you must change it here too.
@@ -173,10 +176,7 @@ function describeNetworkFailure(error) {
   if (error.name === "AbortError") {
     return "The server took too long to respond.";
   }
-  return (
-    "Could not reach the server. Check that the API is running on " +
-    "http://localhost:8000 and try again."
-  );
+  return "Could not reach the server. Check your connection and try again.";
 }
 
 function describeServerFailure(response, body) {
